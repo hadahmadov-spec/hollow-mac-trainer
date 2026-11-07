@@ -3,7 +3,10 @@
 A separate Python/Qt macOS window for the native Steam editions of **Hollow Knight
 1.5.12620** and **Hollow Knight: Silksong 1.0.30000**. No Windows executable or Wine.
 
-Open the application, select a game and choose **Запустить с модом**. Load a save;
+Choose **English** or **Русский** in the sidebar; the language is saved automatically.
+Labels, status messages and supported bridge diagnostics switch immediately.
+
+Open the application, select a game and choose **Launch with mods**. Load a save;
 the switches become available when the bridge reports a gameplay scene. Use Command-Tab
 to move between the game and trainer. The launcher opens the game in a window; fullscreen
 can be selected in the game's settings. Ordinary Steam launches remain unmodified.

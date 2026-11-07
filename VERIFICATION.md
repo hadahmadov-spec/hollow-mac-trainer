@@ -30,3 +30,11 @@ current runtime settings, not older progress. Backups must not overwrite newer s
 
 Local test evidence is kept outside Git in /private/tmp/*-runtime-results.json and
 /private/tmp/knight-pause-*.json. No game binaries or save files are published.
+
+## RU/EN follow-up
+
+- Added a persisted English/Russian selector; English is the default for new preferences.
+- 20 local tests pass, including all existing protocol checks, translation coverage,
+  dynamic diagnostics, failed preference writes and UI rebuild state preservation.
+- Independent review found no actionable issues in localization or UI lifecycle changes.
+- Gameplay and C# bridge are unchanged; the earlier native runtime evidence remains valid.
