@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+vendor/
+bridge/bin/
+bridge/obj/
+graphify-out/
+.impeccable/
+*.spec
+.DS_Store
