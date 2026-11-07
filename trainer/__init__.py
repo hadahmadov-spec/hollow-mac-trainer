@@ -1,0 +1,1 @@
+"""Local macOS trainer frontend."""

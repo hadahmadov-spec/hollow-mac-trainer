@@ -1,0 +1,6 @@
+{
+  "loader": {"url": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_macos_universal_5.4.23.6.zip", "sha256": "2e711e21f6570da964fce4654b1976500dbe043f61778bce0008500078564638"},
+  "knight": {"url": "https://github.com/wzxnb2333/New.HK.Debug/releases/download/v1.4.10.5-r2/DebugMod-Unity6-1.5.12620.zip", "sha256": "de988bb70c578d935fd69f028d4c4537253cb7fe23bc6bbccefb925d1c2b574f"},
+  "silksong": {"url": "https://github.com/hk-speedrunning/Silksong.DebugMod/releases/download/v1.2.1/DebugMod_MANUAL.zip", "sha256": "4e7bb23e62ca7ca0958527cdb9df5fb07a10bbc08951605bb139af69aa0850b3"},
+  "i18n": {"url": "https://api.nuget.org/v3-flatcontainer/silksong.i18n/1.1.1/silksong.i18n.1.1.1.nupkg", "sha256": "6be78def4c8f825f50a97e2ba96e24877dd4bde932bb13199510a494314f332f"}
+}
