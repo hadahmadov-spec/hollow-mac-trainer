@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.request
 import zipfile
+from build_icon import build_icon
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,8 +55,10 @@ def main():
     subprocess.run([args.dotnet, "build", "bridge/TrainerBridge.csproj", "-c", "Release",
                     f"-p:ManagedDir={managed}", f"-p:LoaderDir={ROOT / 'vendor/loader/BepInEx/core'}"], cwd=ROOT, env=env, check=True)
     shutil.copy2(ROOT / "bridge/bin/Release/netstandard2.1/HollowTrainerBridge.dll", ROOT / "vendor/HollowTrainerBridge.dll")
+    icon = build_icon()
     subprocess.run([sys.executable, "-m", "PyInstaller", "--clean", "--noconfirm", "--windowed",
                     "--name", "Hollow Mac Trainer", "--osx-bundle-identifier", "local.hollowtrainer.app",
+                    "--icon", str(icon),
                     "--add-data", "vendor:vendor", "main.py"], cwd=ROOT, check=True)
 
 
