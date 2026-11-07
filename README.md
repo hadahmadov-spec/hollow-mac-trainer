@@ -1,7 +1,20 @@
-# Hollow Mac Trainer
+<p align="center">
+  <img src="assets/app-icon.png" width="128" height="128" alt="Hollow Mac Trainer: the Knight and Hornet masks">
+</p>
 
-A separate Python/Qt macOS window for the native Steam editions of **Hollow Knight
-1.5.12620** and **Hollow Knight: Silksong 1.0.30000**. No Windows executable or Wine.
+<h1 align="center">Hollow Mac Trainer</h1>
+
+<p align="center"><strong>A macOS trainer for Hollow Knight &amp; Silksong</strong></p>
+<p align="center">Standalone app · Native Steam games · English / Русский · No Wine</p>
+
+Control cheats from a separate Mac app: infinite health, soul or silk, extra jumps,
+game speed and more. Choose a game, launch it with mods, then switch controls on
+while you play. Automatic save backups are created before every launch.
+
+**Tested versions:** Hollow Knight **1.5.12620** and Hollow Knight: Silksong
+**1.0.30000** (native macOS Steam editions). An unofficial fan project.
+
+## Getting started
 
 Choose **English** or **Русский** in the sidebar; the language is saved automatically.
 Labels, status messages and supported bridge diagnostics switch immediately.
