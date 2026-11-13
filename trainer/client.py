@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -68,7 +67,11 @@ class Client:
             self.pending = None
             self.error = "Игра перезапущена; настройки не переносились."
         self.session = state["session"]
-        atomic_json(self.folder / "lease.json", {"session": self.session, "timestamp": time.time()})
+        try:
+            atomic_json(self.folder / "lease.json", {"session": self.session, "timestamp": time.time()})
+        except OSError:
+            self.error = "Не удалось записать команду связи. Проверьте доступ к папке тренера."
+            return None
         if self.pending:
             request_id, session, start = self.pending
             if state.get("lastCommand") == request_id and state["session"] == session:
@@ -84,7 +87,7 @@ class Client:
             raise RuntimeError("Дождитесь подтверждения предыдущего действия.")
         state = read_status(self.folder)
         if not state or state["game"] != self.game:
-            raise RuntimeError("Запустите игру с модом.")
+            raise RuntimeError("Нет связи с модулем. Откройте настройку Steam и журнал игры.")
         if operation != "reset" and not state.get("ready"):
             raise RuntimeError("Загрузите сохранение и дождитесь управления героем.")
         identifier = uuid.uuid4().hex
@@ -119,9 +122,15 @@ def backup_saves(game: str, support: Path = SUPPORT) -> Path | None:
     destination = support / "backups" / game / (time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6])
     destination.mkdir(parents=True, mode=0o700)
     hashes = {}
-    # Save files only, not potentially unbounded mod savestates or logs.
+    # Include the game's own restore points under each Steam account, but not
+    # DebugMod savestates. This is an outward-only backup; never a restore.
     folders = [source] + [p for p in source.iterdir() if p.is_dir() and p.name.isdigit() and not p.is_symlink()]
-    for path in (p for folder in folders for p in folder.iterdir()):
+    files = list(source.iterdir())
+    for folder in folders[1:]:
+        for directory, subdirectories, names in os.walk(folder, followlinks=False):
+            subdirectories[:] = [name for name in subdirectories if not (Path(directory) / name).is_symlink()]
+            files.extend(Path(directory) / name for name in names)
+    for path in files:
         if not path.is_symlink() and path.is_file() and (".dat" in path.name or path.name == "steam_autocloud.vdf"):
             relative = path.relative_to(source)
             target = destination / relative
@@ -142,6 +151,8 @@ def prepare_runtime(game: str, support: Path = SUPPORT, assets: Path = ASSETS) -
     for source in (assets / "loader").rglob("*"):
         if source.is_file():
             target = destination / source.relative_to(assets / "loader")
+            if target.exists() and "config" in source.relative_to(assets / "loader").parts:
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
     plugins = destination / "BepInEx/plugins"
@@ -152,27 +163,6 @@ def prepare_runtime(game: str, support: Path = SUPPORT, assets: Path = ASSETS) -
     return destination
 
 
-def launch(game: str, library: str = "") -> subprocess.Popen:
-    import plistlib
-    app = find_game(game, library)
-    if not app:
-        raise RuntimeError("Игра не найдена. Укажите папку SteamLibrary.")
-    info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
-    actual = info.get("CFBundleShortVersionString", "")
-    if actual != GAMES[game]["version"]:
-        raise RuntimeError(f"Установлена версия {actual}; проверена {GAMES[game]['version']}. Нужна проверка совместимости.")
-    executable = app / "Contents/MacOS" / info["CFBundleExecutable"]
-    processes = subprocess.run(["/bin/ps", "-axo", "command="], capture_output=True, text=True, check=True).stdout
-    if str(executable) in processes:
-        raise RuntimeError("Игра уже запущена. Закройте её перед запуском с модом.")
-    backup_saves(game)
-    runtime = prepare_runtime(game)
-    subprocess.run(["/usr/bin/open", "-g", "-a", "Steam"], check=True)
-    environment = os.environ.copy()
-    environment.update(SteamAppId=GAMES[game]["appid"], SteamGameId=GAMES[game]["appid"], HOLLOW_TRAINER_IPC=str(runtime))
-    log = (runtime / "launch.log").open("w")
-    try:
-        return subprocess.Popen(["/bin/sh", str(runtime / "run_bepinex.sh"), str(app), "-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "800", "-logFile", str(runtime / "unity.log")],
-                                cwd=runtime, env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-    finally:
-        log.close()
+def launch(game: str, library: str = "") -> None:
+    from trainer.steam import launch_via_steam
+    launch_via_steam(game, library)
