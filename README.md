@@ -8,8 +8,8 @@
 <p align="center">Standalone app · Native Steam games · English / Русский · No Wine</p>
 
 Control cheats from a separate Mac app: infinite health, soul or silk, extra jumps,
-game speed and more. Choose a game, launch it with mods, then switch controls on
-while you play. Automatic save backups are created before every launch.
+game speed and more. Launch your installed game through Steam; the trainer connects
+automatically when its bridge loads. The Steam wrapper backs up saves before launch.
 
 **Tested versions:** Hollow Knight **1.5.12620** and Hollow Knight: Silksong
 **1.0.30000** (native macOS Steam editions). An unofficial fan project.
@@ -19,10 +19,25 @@ while you play. Automatic save backups are created before every launch.
 Choose **English** or **Русский** in the sidebar; the language is saved automatically.
 Labels, status messages and supported bridge diagnostics switch immediately.
 
-Open the application, select a game and choose **Launch with mods**. Load a save;
-the switches become available when the bridge reports a gameplay scene. Use Command-Tab
-to move between the game and trainer. The launcher opens the game in a window; fullscreen
-can be selected in the game's settings. Ordinary Steam launches remain unmodified.
+Keep the trainer in a stable location, such as `~/Applications`. For each game, select
+**Set up Steam**, copy the command, open the game's **Properties → General → Launch
+Options** in Steam and paste it. Preserve existing game arguments after `%command%`;
+do not combine this with a second launcher wrapper. The setup screen does not edit
+Steam's live configuration files.
+
+After this one-time setup, use Steam's normal **Play** button or **Open through Steam**
+in the trainer. You can open the trainer before or after the game. Load a save to
+enable the switches; use Command-Tab to move between the game and trainer. Window
+size and fullscreen settings are left to the game. Steam owns the launch and game
+lifetime, including its usual Cloud synchronization.
+
+An already running game without the bridge needs one restart after setup; this is
+not live injection into an unmodified process. Remove the launch option to disable
+integration. If the trainer is moved or removed, update or remove that option first.
+The displayed version comes from the installed game (or the connected bridge).
+Other versions are not rejected solely by version number, but compatibility beyond
+the tested versions above is unverified. A missing bridge is shown separately from
+a game that is not running; launch failures are recorded in `steam-launch.json`.
 
 ## Controls
 
@@ -39,10 +54,13 @@ saved progress**: currencies, damage and PlayerData cheat flags may be serialize
 game while enabled. Every launch creates a verified save backup. Prefer a separate save
 for experimenting; never restore a backup over newer progress without keeping a copy.
 
+Backups include the game's own restore-point files. The trainer never restores a
+backup automatically or copies saved progress back into the game's save directory.
+
 The application stores runtime files, logs, preferences and dated backups under
 `~/Library/Application Support/Hollow Mac Trainer`. The game `.app` bundles and their
 assemblies are never modified. Quit the games and trainer before removing its runtime
-folder. A normal Steam launch works without the trainer.
+folder. Remove the Steam launch option before removing the trainer or its runtime.
 
 ## Build
 

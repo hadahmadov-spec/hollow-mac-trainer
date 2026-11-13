@@ -148,6 +148,8 @@ public sealed class TrainerBridge : BaseUnityPlugin {
         if (new FileInfo(path).Length > 4096) return;
         var request = JsonUtility.FromJson<Request>(File.ReadAllText(path));
         if (request == null || string.IsNullOrEmpty(request.id) || seen.Contains(request.id)) return;
+        // A leftover file from another game session is not a failed current action.
+        if (request.session != state.session) return;
         // Never replay currency operations; IDs remembered for this process, including rejected requests.
         if (seen.Count > 20000) throw new InvalidOperationException("Слишком много запросов: перезапустите игру.");
         seen.Add(request.id);

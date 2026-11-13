@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QThread, Signal, QLockFile
 from PySide6.QtGui import QColor, QPainter, QFont, QDesktopServices
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QCheckBox, QDoubleSpinBox, QSpinBox, QScrollArea, QFrame, QFileDialog, QComboBox)
+    QLabel, QPushButton, QCheckBox, QDoubleSpinBox, QSpinBox, QScrollArea, QFrame, QFileDialog, QComboBox,
+    QDialog, QDialogButtonBox, QPlainTextEdit)
 
 from trainer.client import Client, GAMES, SUPPORT, atomic_json, launch
 from trainer.i18n import tr, set_language, get_language, LANGUAGES
+from trainer.steam import app_details, game_processes, launch_options, recent_launch
 
 
 class Switch(QCheckBox):
@@ -91,6 +95,11 @@ class Window(QMainWindow):
         self.game = "knight"
         self.launcher = None
         self.processes = {}
+        self.process_ids = {game: [] for game in GAMES}
+        self.observed_running = {}
+        self.next_discovery = 0
+        self.launch_requested = {}
+        self.auto_select = True
         self.library = ""
         try:
             self.preferences = json.loads((SUPPORT / "preferences.json").read_text())
@@ -139,6 +148,9 @@ class Window(QMainWindow):
         self.library_button = QPushButton(tr("Папка Steam…"))
         self.library_button.clicked.connect(self.choose_library)
         sidebar.addWidget(self.library_button)
+        setup = QPushButton(tr("Настроить Steam"))
+        setup.clicked.connect(self.setup_steam)
+        sidebar.addWidget(setup)
         backups = QPushButton(tr("Копии сохранений"))
         backups.clicked.connect(lambda: self.open_folder(SUPPORT / "backups"))
         sidebar.addWidget(backups)
@@ -159,7 +171,7 @@ class Window(QMainWindow):
         status_row = QHBoxLayout()
         self.status = QLabel(tr("Игра не подключена"), objectName="status")
         status_row.addWidget(self.status, 1)
-        self.start = QPushButton(tr("Запустить с модом"), objectName="primary")
+        self.start = QPushButton(tr("Открыть через Steam"), objectName="primary")
         self.start.clicked.connect(self.start_game)
         status_row.addWidget(self.start)
         column.addLayout(status_row)
@@ -212,6 +224,7 @@ class Window(QMainWindow):
         self.refresh()
 
     def select_game(self, game):
+        self.auto_select = False
         self.game = game
         for key, button in self.game_buttons.items():
             button.setChecked(key == game)
@@ -226,7 +239,7 @@ class Window(QMainWindow):
         self.switches = {}
         self.numbers = {}
         self.title.setText(GAMES[self.game]["title"])
-        self.version.setText(tr("Нативная macOS · ") + GAMES[self.game]["version"])
+        self.version.setText(tr("Нативная macOS · версия определяется по установленной игре"))
         self.section(tr("Выживание и способности"))
         resource = tr("Бесконечная нить") if self.game == "silksong" else tr("Бесконечная душа")
         rows = [("invincible", tr("Неуязвимость"), tr("Игнорировать попадания")),
@@ -301,29 +314,71 @@ class Window(QMainWindow):
 
     def refresh(self):
         states = {game: client.poll() for game, client in self.clients.items()}
+        now = time.monotonic()
+        if now >= self.next_discovery:
+            self.next_discovery = now + 2
+            try:
+                self.process_ids = game_processes()
+            except (OSError, subprocess.SubprocessError):
+                self.process_ids = {game: [] for game in GAMES}
+            for game, pids in self.process_ids.items():
+                if pids:
+                    self.observed_running.setdefault(game, now)
+                else:
+                    self.observed_running.pop(game, None)
+        if self.auto_select:
+            active = [game for game in GAMES if states[game] or self.process_ids[game]]
+            if len(active) == 1:
+                self.auto_select = False
+                if self.game != active[0]:
+                    self.select_game(active[0])
+                    return
         client = self.clients[self.game]
         state = states[self.game]
+        pids = self.process_ids[self.game]
+        try:
+            app, executable, installed_version = app_details(self.game, self.library)
+            actual_version = state.get("version", installed_version) if state else installed_version
+            self.version.setText(tr("Нативная macOS · ") + actual_version)
+            self.version.setToolTip(str(app))
+            if actual_version != GAMES[self.game]["version"]:
+                self.version.setText(tr("Версия {actual} · проверена {tested}", actual=actual_version, tested=GAMES[self.game]["version"]))
+        except (OSError, ValueError, KeyError, RuntimeError):
+            self.version.setText(tr("Игра не найдена. Укажите папку SteamLibrary."))
         ready = bool(state and state.get("ready"))
         pending = client.pending is not None
         for control in self.controls: control.setEnabled(ready and not pending)
         self.reset.setEnabled(bool(state) and not pending)
         running = self.launcher is not None and self.launcher.isRunning()
-        self.start.setEnabled(not state and not running)
-        self.start.setText(tr("Запускаю…") if running else tr("Запустить с модом"))
-        self.status.setText(tr("Подключено · можно включать читы") if ready else tr("Игра запущена · загрузи сохранение") if state else tr("Игра не подключена"))
+        waiting = not state and now - self.launch_requested.get(self.game, -1000) < 30
+        self.start.setEnabled(not state and not running and not pids and not waiting)
+        self.start.setText(tr("Ожидаю Steam…") if running or waiting else tr("Открыть через Steam"))
+        connecting = bool(pids) and now - self.observed_running.get(self.game, now) < 15
+        status = ("Подключено · можно включать читы" if ready else
+                  "Игра запущена · загрузи сохранение" if state else
+                  "Игра открыта · ожидаю модуль" if connecting else
+                  "Игра открыта · модуль не отвечает" if pids else
+                  "Ожидаю запуск игры через Steam" if waiting else "Игра не запущена")
+        self.status.setText(tr(status))
         self.status.setStyleSheet("color:#b9d6bf" if ready else "")
         self.busy.setText(tr("Применяю…") if pending else "")
-        self.error.setText(tr(client.error or (state.get("error", "") if state else "")))
+        launch_state = recent_launch(self.game)
+        error = client.error or (state.get("error", "") if state else launch_state.get("error", ""))
+        if not state and pids and not connecting and not error:
+            error = "Модуль не отвечает. Проверьте настройку Steam и журнал. Если меняли параметры запуска, сохранитесь и перезапустите игру один раз."
+        self.error.setText(tr(error))
         if state:
             currency = tr("розариев") if self.game == "silksong" else "Geo"
             self.stats.setText(tr("Здоровье {health}/{maximum}   ·   {balance} {currency}   ·   урон {damage:g}×   ·   темп {speed:g}×", health=state.get('health', 0), maximum=state.get('maxHealth', 0), balance=state.get('currency', 0), currency=currency, damage=state.get('damage', 1), speed=state.get('speed', 1)))
         else:
-            self.stats.setText(tr("Загрузи сохранение, чтобы включить читы."))
+            self.stats.setText(tr("Запускай игру из Steam. Подключение тренера происходит автоматически."))
         for key, switch in self.switches.items():
             if not pending:
                 switch.setChecked(bool(state and state.get("healthLock" if key == "health" else key)))
 
     def start_game(self):
+        self.clients[self.game].error = ""
+        self.launch_requested[self.game] = time.monotonic()
         self.launcher = Launcher(self.game, self.library)
         self.launcher.done.connect(self.launch_done)
         self.launcher.start()
@@ -331,9 +386,44 @@ class Window(QMainWindow):
 
     def launch_done(self, process, error):
         game = self.launcher.game
-        if error: self.clients[game].error = error
+        if error:
+            self.clients[game].error = error
+            self.launch_requested.pop(game, None)
         else: self.processes[game] = process
         self.refresh()
+
+    def setup_steam(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("Настроить Steam"))
+        dialog.resize(610, 330)
+        layout = QVBoxLayout(dialog)
+        label = QLabel(tr("Один раз открой свойства выбранной игры в Steam → Общие → Параметры запуска и вставь строку ниже. Затем запускай игру как обычно; тренер подключится сам. Если там уже есть параметры, сохрани их и добавь после %command%."))
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        try:
+            command = launch_options(self.game)
+        except RuntimeError as error:
+            self.clients[self.game].error = str(error)
+            return
+        text = QPlainTextEdit(command)
+        text.setReadOnly(True)
+        text.setAccessibleName(tr("Параметры запуска Steam"))
+        layout.addWidget(text)
+        buttons = QHBoxLayout()
+        copy = QPushButton(tr("Копировать"))
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(command))
+        buttons.addWidget(copy)
+        properties = QPushButton(tr("Свойства игры в Steam"))
+        properties.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(f"steam://gameproperties/{GAMES[self.game]['appid']}")))
+        buttons.addWidget(properties)
+        layout.addLayout(buttons)
+        note = QLabel(tr("После настройки уже открытую игру нужно перезапустить один раз. Для отключения убери эту строку из Steam. Сохранения не переносятся и не восстанавливаются автоматически."))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        close = QDialogButtonBox(QDialogButtonBox.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
+        dialog.exec()
 
     def choose_library(self):
         folder = QFileDialog.getExistingDirectory(self, tr("Выбери SteamLibrary"), self.library or "/Volumes")
